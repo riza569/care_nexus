@@ -1,9 +1,6 @@
 import { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/services/firebase';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { Navbar } from '@/components/layout/Navbar';
@@ -38,21 +35,14 @@ const App = () => {
   }, [setTheme]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        // Get user role from Firestore
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        const userData = userDoc.data();
-        setRole(userData?.role || 'caretaker');
-      } else {
-        setUser(null);
-        setRole(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // Check localStorage for saved auth
+    const savedAuth = localStorage.getItem('auth-user');
+    if (savedAuth) {
+      const { user, role } = JSON.parse(savedAuth);
+      setUser(user);
+      setRole(role);
+    }
+    setLoading(false);
   }, [setUser, setRole, setLoading]);
 
   if (!user) {
