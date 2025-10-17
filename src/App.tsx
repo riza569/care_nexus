@@ -8,7 +8,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
 
 // Auth
-import Login from '@/pages/auth/Login';
+import AdminLogin from '@/pages/auth/AdminLogin';
+import CarerLogin from '@/pages/auth/CarerLogin';
 
 // Caretaker pages
 import MyDay from '@/pages/caretaker/MyDay';
@@ -20,6 +21,8 @@ import Profile from '@/pages/caretaker/Profile';
 import Dashboard from '@/pages/admin/Dashboard';
 import Clients from '@/pages/admin/Clients';
 import Scheduling from '@/pages/admin/Scheduling';
+import Carers from '@/pages/admin/Carers';
+import AdminMessages from '@/pages/admin/Messages';
 
 const App = () => {
   const { user, role, setUser, setRole, setLoading } = useAuthStore();
@@ -50,8 +53,9 @@ const App = () => {
       <BrowserRouter>
         <Toaster position="top-center" />
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/carer/login" element={<CarerLogin />} />
+          <Route path="*" element={<Navigate to="/admin/login" replace />} />
         </Routes>
       </BrowserRouter>
     );
@@ -72,9 +76,9 @@ const App = () => {
                 <Route path="/admin/clients" element={<Clients />} />
                 <Route path="/admin/scheduling" element={<Scheduling />} />
                 <Route path="/admin/actions" element={<div className="p-6">My Actions - Coming Soon</div>} />
-                <Route path="/admin/carers" element={<div className="p-6">Carers Management - Coming Soon</div>} />
+                <Route path="/admin/carers" element={<Carers />} />
                 <Route path="/admin/training" element={<div className="p-6">Training - Coming Soon</div>} />
-                <Route path="/admin/messages" element={<div className="p-6">Messages - Coming Soon</div>} />
+                <Route path="/admin/messages" element={<AdminMessages />} />
                 <Route path="/admin/reports" element={<div className="p-6">Reports - Coming Soon</div>} />
                 <Route path="/admin/finance" element={<div className="p-6">Finance - Coming Soon</div>} />
                 <Route path="/admin/policies" element={<div className="p-6">Policies - Coming Soon</div>} />
