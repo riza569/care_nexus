@@ -1,12 +1,21 @@
-import { Moon, Sun, Bell, User } from 'lucide-react';
+import { Moon, Sun, Bell, User, LogOut } from 'lucide-react';
 import { useThemeStore } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 export const Navbar = () => {
   const { theme, toggleTheme } = useThemeStore();
-  const { user, role } = useAuthStore();
+  const { user, role, logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Logged out successfully');
+    navigate(role === 'admin' ? '/admin/login' : '/carer/login');
+  };
 
   return (
     <motion.nav
@@ -51,6 +60,17 @@ export const Navbar = () => {
           {/* User Menu */}
           <Button variant="ghost" size="icon" className="rounded-full">
             <User className="h-5 w-5" />
+          </Button>
+
+          {/* Logout */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="transition-transform hover:scale-110"
+            title="Logout"
+          >
+            <LogOut className="h-5 w-5 text-destructive" />
           </Button>
         </div>
       </div>
