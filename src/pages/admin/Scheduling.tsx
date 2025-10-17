@@ -57,8 +57,8 @@ export default function Scheduling() {
       setClients(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
 
-    // Load carers
-    const carersQuery = query(collection(db, 'users'), where('role', '==', 'caretaker'));
+    // Load carers from carers collection
+    const carersQuery = query(collection(db, 'carers'));
     const unsubCarers = onSnapshot(carersQuery, (snapshot) => {
       setCarers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
@@ -89,7 +89,7 @@ export default function Scheduling() {
         clientName: selectedClient.name,
         clientAddress: selectedClient.address,
         carerId: newVisit.carerId,
-        carerName: selectedCarer.email?.split('@')[0] || 'Carer',
+        carerName: selectedCarer.name,
         scheduledDate: Timestamp.fromDate(scheduledDateTime),
         duration: newVisit.duration,
         status: 'scheduled',
@@ -167,7 +167,7 @@ export default function Scheduling() {
                   <option value="">Select a caretaker</option>
                   {carers.map((carer) => (
                     <option key={carer.id} value={carer.id}>
-                      {carer.email}
+                      {carer.name}
                     </option>
                   ))}
                 </select>
