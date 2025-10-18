@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, Timestamp, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, where } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { motion } from 'framer-motion';
-import { CalendarPlus, Calendar, Clock, User } from 'lucide-react';
+import { CalendarPlus, Calendar, Clock, User, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { format, addDays, startOfDay } from 'date-fns';
@@ -24,12 +25,22 @@ export default function Scheduling() {
   const [clients, setClients] = useState<any[]>([]);
   const [carers, setCarers] = useState<any[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [newVisit, setNewVisit] = useState({
     clientId: '',
     carerId: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '09:00',
+    duration: 60,
+  });
+  const [editVisit, setEditVisit] = useState({
+    clientId: '',
+    carerId: '',
+    date: '',
+    time: '',
     duration: 60,
   });
 
@@ -109,6 +120,54 @@ export default function Scheduling() {
     } catch (error) {
       console.error('Error scheduling visit:', error);
       toast.error('Failed to schedule visit');
+    }
+  };
+
+  const handleEditVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVisit) return;
+    
+    const selectedClient = clients.find((c) => c.id === editVisit.clientId);
+    const selectedCarer = carers.find((c) => c.id === editVisit.carerId);
+
+    if (!selectedClient || !selectedCarer) {
+      toast.error('Please select both client and carer');
+      return;
+    }
+
+    const scheduledDateTime = new Date(`${editVisit.date}T${editVisit.time}`);
+
+    try {
+      await updateDoc(doc(db, 'visits', selectedVisit.id), {
+        clientId: editVisit.clientId,
+        clientName: selectedClient.name,
+        clientAddress: selectedClient.address,
+        carerId: editVisit.carerId,
+        carerName: selectedCarer.name,
+        scheduledDate: Timestamp.fromDate(scheduledDateTime),
+        duration: editVisit.duration,
+      });
+
+      toast.success('Visit updated successfully');
+      setIsEditDialogOpen(false);
+      setSelectedVisit(null);
+    } catch (error) {
+      console.error('Error updating visit:', error);
+      toast.error('Failed to update visit');
+    }
+  };
+
+  const handleDeleteVisit = async () => {
+    if (!selectedVisit) return;
+    
+    try {
+      await deleteDoc(doc(db, 'visits', selectedVisit.id));
+      toast.success('Visit deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setSelectedVisit(null);
+    } catch (error) {
+      console.error('Error deleting visit:', error);
+      toast.error('Failed to delete visit');
     }
   };
 
@@ -264,20 +323,151 @@ export default function Scheduling() {
                     </div>
                   </div>
                 </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    visit.status === 'completed'
-                      ? 'bg-secondary/10 text-secondary'
-                      : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  {visit.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      visit.status === 'completed'
+                        ? 'bg-secondary/10 text-secondary'
+                        : 'bg-primary/10 text-primary'
+                    }`}
+                  >
+                    {visit.status}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedVisit(visit);
+                      // Find the client and carer IDs for the edit form
+                      const client = clients.find(c => c.name === visit.clientName);
+                      const carer = carers.find(c => c.name === visit.carerName);
+                      setEditVisit({
+                        clientId: client?.id || '',
+                        carerId: carer?.id || '',
+                        date: format(visit.scheduledDate, 'yyyy-MM-dd'),
+                        time: format(visit.scheduledDate, 'HH:mm'),
+                        duration: visit.duration,
+                      });
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => {
+                      setSelectedVisit(visit);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </motion.div>
           ))
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Visit</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditVisit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-client">Client</Label>
+              <select
+                id="edit-client"
+                value={editVisit.clientId}
+                onChange={(e) => setEditVisit({ ...editVisit, clientId: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                required
+              >
+                <option value="">Select a client</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-carer">Caretaker</Label>
+              <select
+                id="edit-carer"
+                value={editVisit.carerId}
+                onChange={(e) => setEditVisit({ ...editVisit, carerId: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                required
+              >
+                <option value="">Select a caretaker</option>
+                {carers.map((carer) => (
+                  <option key={carer.id} value={carer.id}>
+                    {carer.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-date">Date</Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editVisit.date}
+                  onChange={(e) => setEditVisit({ ...editVisit, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-time">Time</Label>
+                <Input
+                  id="edit-time"
+                  type="time"
+                  value={editVisit.time}
+                  onChange={(e) => setEditVisit({ ...editVisit, time: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-duration">Duration (minutes)</Label>
+              <Input
+                id="edit-duration"
+                type="number"
+                value={editVisit.duration}
+                onChange={(e) => setEditVisit({ ...editVisit, duration: parseInt(e.target.value) })}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full bg-gradient-primary">
+              Update Visit
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the visit for {selectedVisit?.clientName}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteVisit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

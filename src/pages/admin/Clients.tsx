@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { motion } from 'framer-motion';
-import { UserPlus, Search, Phone, MapPin, Calendar } from 'lucide-react';
+import { UserPlus, Search, Phone, MapPin, Calendar, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import toast from 'react-hot-toast';
 
@@ -22,6 +23,9 @@ export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState({
     name: '',
     address: '',
@@ -63,6 +67,40 @@ export default function Clients() {
     } catch (error) {
       console.error('Error adding client:', error);
       toast.error('Failed to add client');
+    }
+  };
+
+  const handleEditClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient) return;
+    
+    try {
+      await updateDoc(doc(db, 'clients', selectedClient.id), {
+        name: selectedClient.name,
+        address: selectedClient.address,
+        phone: selectedClient.phone,
+        careLevel: selectedClient.careLevel,
+      });
+      toast.success('Client updated successfully');
+      setIsEditDialogOpen(false);
+      setSelectedClient(null);
+    } catch (error) {
+      console.error('Error updating client:', error);
+      toast.error('Failed to update client');
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!selectedClient) return;
+    
+    try {
+      await deleteDoc(doc(db, 'clients', selectedClient.id));
+      toast.success('Client deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setSelectedClient(null);
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast.error('Failed to delete client');
     }
   };
 
@@ -184,9 +222,108 @@ export default function Clients() {
                 Added {client.createdAt.toLocaleDateString()}
               </div>
             </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  setSelectedClient(client);
+                  setIsEditDialogOpen(true);
+                }}
+              >
+                <Pencil className="mr-2 h-3 w-3" />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => {
+                  setSelectedClient(client);
+                  setIsDeleteDialogOpen(true);
+                }}
+              >
+                <Trash2 className="mr-2 h-3 w-3" />
+                Delete
+              </Button>
+            </div>
           </motion.div>
         ))}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditClient} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Full Name</Label>
+              <Input
+                id="edit-name"
+                value={selectedClient?.name || ''}
+                onChange={(e) => setSelectedClient(selectedClient ? { ...selectedClient, name: e.target.value } : null)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Address</Label>
+              <Input
+                id="edit-address"
+                value={selectedClient?.address || ''}
+                onChange={(e) => setSelectedClient(selectedClient ? { ...selectedClient, address: e.target.value } : null)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone Number</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={selectedClient?.phone || ''}
+                onChange={(e) => setSelectedClient(selectedClient ? { ...selectedClient, phone: e.target.value } : null)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-careLevel">Care Level</Label>
+              <select
+                id="edit-careLevel"
+                value={selectedClient?.careLevel || 'standard'}
+                onChange={(e) => setSelectedClient(selectedClient ? { ...selectedClient, careLevel: e.target.value } : null)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              >
+                <option value="standard">Standard</option>
+                <option value="enhanced">Enhanced</option>
+                <option value="complex">Complex</option>
+              </select>
+            </div>
+            <Button type="submit" className="w-full bg-gradient-primary">
+              Update Client
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedClient?.name}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {filteredClients.length === 0 && (
         <div className="rounded-xl bg-card p-12 text-center shadow-soft">

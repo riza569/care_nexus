@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Mail, Phone, User, Lock } from 'lucide-react';
+import { Plus, Search, Mail, Phone, User, Lock, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useFirebaseCollection } from '@/hooks/useFirebaseData';
 import toast from 'react-hot-toast';
@@ -16,12 +17,16 @@ interface Carer {
   email: string;
   phone: string;
   username: string;
+  password?: string;
   createdAt: any;
 }
 
 export default function Carers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCarer, setSelectedCarer] = useState<Carer | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -59,6 +64,49 @@ export default function Carers() {
     } catch (error) {
       console.error('Error adding carer:', error);
       toast.error('Failed to add carer');
+    }
+  };
+
+  const handleEditCarer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCarer) return;
+    
+    try {
+      // Check if username already exists (excluding current carer)
+      const existingCarer = carers.find(c => c.username === selectedCarer.username && c.id !== selectedCarer.id);
+      if (existingCarer) {
+        toast.error('Username already exists');
+        return;
+      }
+
+      await updateDoc(doc(db, 'carers', selectedCarer.id), {
+        name: selectedCarer.name,
+        email: selectedCarer.email,
+        phone: selectedCarer.phone,
+        username: selectedCarer.username,
+        ...(selectedCarer.password && { password: selectedCarer.password }),
+      });
+
+      toast.success('Carer updated successfully');
+      setIsEditDialogOpen(false);
+      setSelectedCarer(null);
+    } catch (error) {
+      console.error('Error updating carer:', error);
+      toast.error('Failed to update carer');
+    }
+  };
+
+  const handleDeleteCarer = async () => {
+    if (!selectedCarer) return;
+    
+    try {
+      await deleteDoc(doc(db, 'carers', selectedCarer.id));
+      toast.success('Carer deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setSelectedCarer(null);
+    } catch (error) {
+      console.error('Error deleting carer:', error);
+      toast.error('Failed to delete carer');
     }
   };
 
@@ -196,10 +244,128 @@ export default function Carers() {
                     {carer.username}
                   </div>
                 </div>
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setSelectedCarer(carer);
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="mr-2 h-3 w-3" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => {
+                      setSelectedCarer(carer);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-3 w-3" />
+                    Delete
+                  </Button>
+                </div>
               </motion.div>
             ))
           )}
         </div>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Carer</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleEditCarer} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={selectedCarer?.name || ''}
+                  onChange={(e) => setSelectedCarer(selectedCarer ? { ...selectedCarer, name: e.target.value } : null)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={selectedCarer?.email || ''}
+                  onChange={(e) => setSelectedCarer(selectedCarer ? { ...selectedCarer, email: e.target.value } : null)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone</Label>
+                <Input
+                  id="edit-phone"
+                  type="tel"
+                  value={selectedCarer?.phone || ''}
+                  onChange={(e) => setSelectedCarer(selectedCarer ? { ...selectedCarer, phone: e.target.value } : null)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-username">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="edit-username"
+                    className="pl-10"
+                    value={selectedCarer?.username || ''}
+                    onChange={(e) => setSelectedCarer(selectedCarer ? { ...selectedCarer, username: e.target.value } : null)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-password">Password (leave blank to keep current)</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="edit-password"
+                    type="password"
+                    className="pl-10"
+                    placeholder="••••••••"
+                    onChange={(e) => setSelectedCarer(selectedCarer ? { ...selectedCarer, password: e.target.value } : null)}
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full bg-gradient-primary">
+                Update Carer
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete {selectedCarer?.name}. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteCarer} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </motion.div>
     </div>
   );
