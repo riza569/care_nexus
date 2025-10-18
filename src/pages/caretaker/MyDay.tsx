@@ -35,27 +35,31 @@ export default function MyDay() {
 
     const visitsQuery = query(
       collection(db, 'visits'),
-      where('carerId', '==', user.uid),
-      where('scheduledDate', '>=', Timestamp.fromDate(today)),
-      where('scheduledDate', '<', Timestamp.fromDate(tomorrow)),
-      orderBy('scheduledDate', 'asc')
+      where('carerId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(
       visitsQuery, 
       (snapshot) => {
-        const visitsData = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            clientName: data.clientName,
-            clientAddress: data.clientAddress,
-            scheduledTime: data.scheduledDate.toDate(),
-            duration: data.duration,
-            status: data.status,
-            tasks: data.tasks || [],
-          };
-        });
+        const visitsData = snapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            const scheduledTime = data.scheduledDate.toDate();
+            return {
+              id: doc.id,
+              clientName: data.clientName,
+              clientAddress: data.clientAddress,
+              scheduledTime,
+              duration: data.duration,
+              status: data.status,
+              tasks: data.tasks || [],
+            };
+          })
+          .filter((visit) => {
+            return visit.scheduledTime >= today && visit.scheduledTime < tomorrow;
+          })
+          .sort((a, b) => a.scheduledTime.getTime() - b.scheduledTime.getTime());
+        
         setVisits(visitsData);
         setLoading(false);
       },

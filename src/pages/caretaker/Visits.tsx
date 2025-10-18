@@ -25,7 +25,10 @@ export default function Visits() {
   const { user } = useAuthStore();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const dayStart = new Date(selectedDate);
     dayStart.setHours(0, 0, 0, 0);
@@ -34,25 +37,29 @@ export default function Visits() {
 
     const visitsQuery = query(
       collection(db, 'visits'),
-      where('carerId', '==', user.uid),
-      where('scheduledDate', '>=', Timestamp.fromDate(dayStart)),
-      where('scheduledDate', '<=', Timestamp.fromDate(dayEnd)),
-      orderBy('scheduledDate', 'asc')
+      where('carerId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(visitsQuery, (snapshot) => {
-      const visitsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          clientName: data.clientName,
-          clientAddress: data.clientAddress,
-          scheduledDate: data.scheduledDate.toDate(),
-          duration: data.duration,
-          status: data.status,
-          tasks: data.tasks || [],
-        };
-      });
+      const visitsData = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          const scheduledDate = data.scheduledDate.toDate();
+          return {
+            id: doc.id,
+            clientName: data.clientName,
+            clientAddress: data.clientAddress,
+            scheduledDate,
+            duration: data.duration,
+            status: data.status,
+            tasks: data.tasks || [],
+          };
+        })
+        .filter((visit) => {
+          return visit.scheduledDate >= dayStart && visit.scheduledDate <= dayEnd;
+        })
+        .sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime());
+      
       setVisits(visitsData);
       setLoading(false);
     });
