@@ -23,7 +23,10 @@ export default function MyDay() {
   const { user } = useAuthStore();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -38,22 +41,29 @@ export default function MyDay() {
       orderBy('scheduledDate', 'asc')
     );
 
-    const unsubscribe = onSnapshot(visitsQuery, (snapshot) => {
-      const visitsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          clientName: data.clientName,
-          clientAddress: data.clientAddress,
-          scheduledTime: data.scheduledDate.toDate(),
-          duration: data.duration,
-          status: data.status,
-          tasks: data.tasks || [],
-        };
-      });
-      setVisits(visitsData);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      visitsQuery, 
+      (snapshot) => {
+        const visitsData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            clientName: data.clientName,
+            clientAddress: data.clientAddress,
+            scheduledTime: data.scheduledDate.toDate(),
+            duration: data.duration,
+            status: data.status,
+            tasks: data.tasks || [],
+          };
+        });
+        setVisits(visitsData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching visits:', error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [user]);
