@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -66,28 +67,30 @@ const App = () => {
     return (
       <BrowserRouter>
         <Toaster position="top-center" />
-        <div className="flex min-h-screen flex-col">
-          <Navbar />
-          <div className="flex flex-1">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-background">
-              <Routes>
-                <Route path="/admin/dashboard" element={<Dashboard />} />
-                <Route path="/admin/clients" element={<Clients />} />
-                <Route path="/admin/scheduling" element={<Scheduling />} />
-                <Route path="/admin/actions" element={<div className="p-6">My Actions - Coming Soon</div>} />
-                <Route path="/admin/carers" element={<Carers />} />
-                <Route path="/admin/training" element={<div className="p-6">Training - Coming Soon</div>} />
-                <Route path="/admin/messages" element={<AdminMessages />} />
-                <Route path="/admin/reports" element={<div className="p-6">Reports - Coming Soon</div>} />
-                <Route path="/admin/finance" element={<div className="p-6">Finance - Coming Soon</div>} />
-                <Route path="/admin/policies" element={<div className="p-6">Policies - Coming Soon</div>} />
-                <Route path="/admin/settings" element={<div className="p-6">Settings - Coming Soon</div>} />
-                <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-              </Routes>
-            </main>
+        <SidebarProvider defaultOpen={true}>
+          <div className="flex min-h-screen w-full flex-col">
+            <Navbar />
+            <div className="flex flex-1 w-full">
+              <Sidebar />
+              <main className="flex-1 overflow-y-auto bg-background">
+                <Routes>
+                  <Route path="/admin/dashboard" element={<Dashboard />} />
+                  <Route path="/admin/clients" element={<Clients />} />
+                  <Route path="/admin/scheduling" element={<Scheduling />} />
+                  <Route path="/admin/actions" element={<div className="p-6">My Actions - Coming Soon</div>} />
+                  <Route path="/admin/carers" element={<Carers />} />
+                  <Route path="/admin/training" element={<div className="p-6">Training - Coming Soon</div>} />
+                  <Route path="/admin/messages" element={<AdminMessages />} />
+                  <Route path="/admin/reports" element={<div className="p-6">Reports - Coming Soon</div>} />
+                  <Route path="/admin/finance" element={<div className="p-6">Finance - Coming Soon</div>} />
+                  <Route path="/admin/policies" element={<div className="p-6">Policies - Coming Soon</div>} />
+                  <Route path="/admin/settings" element={<div className="p-6">Settings - Coming Soon</div>} />
+                  <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+                </Routes>
+              </main>
+            </div>
           </div>
-        </div>
+        </SidebarProvider>
       </BrowserRouter>
     );
   }
