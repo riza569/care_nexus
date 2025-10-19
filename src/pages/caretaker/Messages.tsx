@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, Timestamp, or, and, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { useAuthStore } from '@/store/authStore';
 import { motion } from 'framer-motion';
@@ -27,19 +27,21 @@ export default function Messages() {
 
     const messagesQuery = query(
       collection(db, 'messages'),
-      or(
-        and(where('senderId', '==', user.uid)),
-        and(where('receiverId', '==', user.uid))
-      ),
       orderBy('timestamp', 'asc')
     );
 
     const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-      const messagesData = snapshot.docs.map((doc) => ({
+      const allMessages = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Message[];
-      setMessages(messagesData);
+      
+      // Filter messages where user is sender or receiver
+      const filteredMessages = allMessages.filter(
+        (msg) => msg.senderId === user.uid || msg.receiverId === user.uid
+      );
+      
+      setMessages(filteredMessages);
     });
 
     return () => unsubscribe();
@@ -54,11 +56,16 @@ export default function Messages() {
     if (!newMessage.trim() || !user) return;
 
     try {
+      // Get admin user ID dynamically
+      const adminsQuery = query(collection(db, 'users'), limit(1));
+      const adminsSnapshot = await getDocs(adminsQuery);
+      const adminId = adminsSnapshot.docs[0]?.id || 'admin';
+
       await addDoc(collection(db, 'messages'), {
         text: newMessage,
         senderId: user.uid,
-        senderName: user.name || 'Carer',
-        receiverId: 'admin',
+        senderName: user.displayName || user.email || 'Carer',
+        receiverId: adminId,
         timestamp: Timestamp.now(),
       });
       setNewMessage('');

@@ -34,22 +34,25 @@ export default function AdminMessages() {
   const { data: carers, loading: carersLoading } = useFirebaseCollection<Carer>('carers');
 
   useEffect(() => {
-    if (!selectedCarer) return;
+    if (!selectedCarer || !user) return;
 
     const messagesRef = collection(db, 'messages');
-    const q = query(
-      messagesRef,
-      where('senderId', 'in', [user?.uid, selectedCarer.id]),
-      where('receiverId', 'in', [user?.uid, selectedCarer.id]),
-      orderBy('timestamp', 'asc')
-    );
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
+      const allMsgs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Message[];
-      setMessages(msgs);
+      
+      // Filter messages between admin and selected carer
+      const filteredMsgs = allMsgs.filter(
+        (msg) =>
+          (msg.senderId === user.uid && msg.receiverId === selectedCarer.id) ||
+          (msg.senderId === selectedCarer.id && msg.receiverId === user.uid)
+      );
+      
+      setMessages(filteredMsgs);
     });
 
     return () => unsubscribe();
