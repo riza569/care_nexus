@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 import { motion } from 'framer-motion';
-import { UserPlus, Search, Phone, MapPin, Calendar, Pencil, Trash2 } from 'lucide-react';
+import { UserPlus, Search, Phone, MapPin, Calendar, Pencil, Trash2, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,6 +16,10 @@ interface Client {
   address: string;
   phone: string;
   careLevel: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
   createdAt: Date;
 }
 
@@ -31,7 +35,10 @@ export default function Clients() {
     address: '',
     phone: '',
     careLevel: 'standard',
+    latitude: '',
+    longitude: '',
   });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   useEffect(() => {
     const clientsQuery = query(collection(db, 'clients'));
@@ -45,6 +52,7 @@ export default function Clients() {
           address: data.address,
           phone: data.phone,
           careLevel: data.careLevel,
+          location: data.location,
           createdAt: data.createdAt?.toDate() || new Date(),
         };
       });
@@ -54,16 +62,61 @@ export default function Clients() {
     return () => unsubscribe();
   }, []);
 
+  const getCurrentLocation = (isEdit: boolean = false) => {
+    setIsGettingLocation(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          if (isEdit && selectedClient) {
+            setSelectedClient({
+              ...selectedClient,
+              location: { latitude, longitude },
+            });
+          } else {
+            setNewClient({
+              ...newClient,
+              latitude: latitude.toString(),
+              longitude: longitude.toString(),
+            });
+          }
+          toast.success('Location captured successfully');
+          setIsGettingLocation(false);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          toast.error('Failed to get location. Please enter manually.');
+          setIsGettingLocation(false);
+        }
+      );
+    } else {
+      toast.error('Geolocation is not supported by your browser');
+      setIsGettingLocation(false);
+    }
+  };
+
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'clients'), {
-        ...newClient,
+      const clientData: any = {
+        name: newClient.name,
+        address: newClient.address,
+        phone: newClient.phone,
+        careLevel: newClient.careLevel,
         createdAt: Timestamp.now(),
-      });
+      };
+
+      if (newClient.latitude && newClient.longitude) {
+        clientData.location = {
+          latitude: parseFloat(newClient.latitude),
+          longitude: parseFloat(newClient.longitude),
+        };
+      }
+
+      await addDoc(collection(db, 'clients'), clientData);
       toast.success('Client added successfully');
       setIsAddDialogOpen(false);
-      setNewClient({ name: '', address: '', phone: '', careLevel: 'standard' });
+      setNewClient({ name: '', address: '', phone: '', careLevel: 'standard', latitude: '', longitude: '' });
     } catch (error) {
       console.error('Error adding client:', error);
       toast.error('Failed to add client');
@@ -75,12 +128,18 @@ export default function Clients() {
     if (!selectedClient) return;
     
     try {
-      await updateDoc(doc(db, 'clients', selectedClient.id), {
+      const updateData: any = {
         name: selectedClient.name,
         address: selectedClient.address,
         phone: selectedClient.phone,
         careLevel: selectedClient.careLevel,
-      });
+      };
+
+      if (selectedClient.location) {
+        updateData.location = selectedClient.location;
+      }
+
+      await updateDoc(doc(db, 'clients', selectedClient.id), updateData);
       toast.success('Client updated successfully');
       setIsEditDialogOpen(false);
       setSelectedClient(null);
@@ -108,6 +167,20 @@ export default function Clients() {
     client.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const getCareLevelBadge = (level: string) => {
+    const colors = {
+      standard: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      enhanced: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      complex: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    };
+    return colors[level as keyof typeof colors] || colors.standard;
+  };
+
+  const openInMaps = (location: { latitude: number; longitude: number }) => {
+    const url = `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -123,7 +196,7 @@ export default function Clients() {
               Add Client
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Client</DialogTitle>
             </DialogHeader>
@@ -169,6 +242,48 @@ export default function Clients() {
                   <option value="complex">Complex</option>
                 </select>
               </div>
+              
+              {/* Location Section */}
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Location (Optional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => getCurrentLocation(false)}
+                    disabled={isGettingLocation}
+                  >
+                    <Navigation className="mr-2 h-4 w-4" />
+                    {isGettingLocation ? 'Getting...' : 'Use Current Location'}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="latitude">Latitude</Label>
+                    <Input
+                      id="latitude"
+                      type="number"
+                      step="any"
+                      placeholder="51.5074"
+                      value={newClient.latitude}
+                      onChange={(e) => setNewClient({ ...newClient, latitude: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="longitude">Longitude</Label>
+                    <Input
+                      id="longitude"
+                      type="number"
+                      step="any"
+                      placeholder="-0.1278"
+                      value={newClient.longitude}
+                      onChange={(e) => setNewClient({ ...newClient, longitude: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <Button type="submit" className="w-full bg-gradient-primary">
                 Add Client
               </Button>
@@ -189,64 +304,81 @@ export default function Clients() {
         />
       </div>
 
-      {/* Clients Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* Clients List */}
+      <div className="space-y-3">
         {filteredClients.map((client, index) => (
           <motion.div
             key={client.id}
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: index * 0.05 }}
-            className="rounded-xl bg-gradient-card p-6 shadow-soft transition-all hover:shadow-medium"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: index * 0.03 }}
+            className="rounded-xl bg-gradient-card p-4 shadow-soft transition-all hover:shadow-medium"
           >
-            <div className="mb-4 flex items-start justify-between">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <span className="text-lg font-bold">{client.name.charAt(0)}</span>
+            <div className="flex items-center justify-between gap-4">
+              {/* Avatar and Name */}
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <span className="text-lg font-bold">{client.name.charAt(0)}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-foreground truncate">{client.name}</h3>
+                  <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5" />
+                      <span>{client.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" />
+                      <span className="truncate max-w-xs">{client.address}</span>
+                    </div>
+                    {client.location && (
+                      <button
+                        onClick={() => openInMaps(client.location!)}
+                        className="flex items-center gap-1.5 text-primary hover:underline"
+                      >
+                        <Navigation className="h-3.5 w-3.5" />
+                        <span>View on Map</span>
+                      </button>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>{client.createdAt.toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <span className="rounded-full bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary capitalize">
-                {client.careLevel}
-              </span>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground">{client.name}</h3>
-            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                {client.phone}
+
+              {/* Care Level Badge */}
+              <div className="flex items-center gap-3">
+                <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize whitespace-nowrap ${getCareLevelBadge(client.careLevel)}`}>
+                  {client.careLevel}
+                </span>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedClient(client);
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => {
+                      setSelectedClient(client);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                {client.address}
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Added {client.createdAt.toLocaleDateString()}
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => {
-                  setSelectedClient(client);
-                  setIsEditDialogOpen(true);
-                }}
-              >
-                <Pencil className="mr-2 h-3 w-3" />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                onClick={() => {
-                  setSelectedClient(client);
-                  setIsDeleteDialogOpen(true);
-                }}
-              >
-                <Trash2 className="mr-2 h-3 w-3" />
-                Delete
-              </Button>
             </div>
           </motion.div>
         ))}
@@ -254,7 +386,7 @@ export default function Clients() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Client</DialogTitle>
           </DialogHeader>
@@ -300,6 +432,72 @@ export default function Clients() {
                 <option value="complex">Complex</option>
               </select>
             </div>
+
+            {/* Location Section */}
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Location</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => getCurrentLocation(true)}
+                  disabled={isGettingLocation}
+                >
+                  <Navigation className="mr-2 h-4 w-4" />
+                  {isGettingLocation ? 'Getting...' : 'Update Location'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-latitude">Latitude</Label>
+                  <Input
+                    id="edit-latitude"
+                    type="number"
+                    step="any"
+                    placeholder="51.5074"
+                    value={selectedClient?.location?.latitude || ''}
+                    onChange={(e) => setSelectedClient(selectedClient ? {
+                      ...selectedClient,
+                      location: {
+                        latitude: parseFloat(e.target.value) || 0,
+                        longitude: selectedClient.location?.longitude || 0,
+                      }
+                    } : null)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-longitude">Longitude</Label>
+                  <Input
+                    id="edit-longitude"
+                    type="number"
+                    step="any"
+                    placeholder="-0.1278"
+                    value={selectedClient?.location?.longitude || ''}
+                    onChange={(e) => setSelectedClient(selectedClient ? {
+                      ...selectedClient,
+                      location: {
+                        latitude: selectedClient.location?.latitude || 0,
+                        longitude: parseFloat(e.target.value) || 0,
+                      }
+                    } : null)}
+                  />
+                </div>
+              </div>
+              {selectedClient?.location && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => openInMaps(selectedClient.location!)}
+                >
+                  <MapPin className="mr-2 h-4 w-4" />
+                  View Current Location on Map
+                </Button>
+              )}
+            </div>
+
             <Button type="submit" className="w-full bg-gradient-primary">
               Update Client
             </Button>
