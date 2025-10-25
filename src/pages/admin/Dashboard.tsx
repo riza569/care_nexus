@@ -1,240 +1,182 @@
-import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, where, Timestamp, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/services/firebase';
-import { StatCard } from '@/components/ui/stat-card';
-import { Users, Calendar, AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from "@tanstack/react-query";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Users, Calendar, UserCircle, CalendarClock } from "lucide-react";
+import { clientsAPI, usersAPI, schedulesAPI, leaveAPI } from "@/lib/api";
+import type { User, Schedule, LeaveRequest } from "@/types";
 
-interface RecentVisit {
-  id: string;
-  carerName: string;
-  clientName: string;
-  status: string;
-  timestamp: Date;
-}
-
-export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalClients: 0,
-    activeCarers: 0,
-    todayVisits: 0,
-    completedVisits: 0,
-    pendingIncidents: 0,
-    upcomingVisits: 0,
+const AdminDashboard = () => {
+  const { data: clients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: () => clientsAPI.list().then((res) => res.data),
   });
-  const [recentVisits, setRecentVisits] = useState<RecentVisit[]>([]);
 
-  useEffect(() => {
-    // Real-time listeners for dashboard stats
-    const unsubscribers: (() => void)[] = [];
+  const { data: users } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => usersAPI.list().then((res) => res.data),
+  });
 
-    // Listen to clients
-    const clientsQuery = query(collection(db, 'clients'));
-    unsubscribers.push(
-      onSnapshot(clientsQuery, (snapshot) => {
-        setStats((prev) => ({ ...prev, totalClients: snapshot.size }));
-      })
-    );
+  const { data: schedules } = useQuery({
+    queryKey: ["schedules"],
+    queryFn: () => schedulesAPI.list().then((res) => res.data),
+  });
 
-    // Listen to carers
-    const carersQuery = query(
-      collection(db, 'users'),
-      where('role', '==', 'caretaker')
-    );
-    unsubscribers.push(
-      onSnapshot(carersQuery, (snapshot) => {
-        setStats((prev) => ({ ...prev, activeCarers: snapshot.size }));
-      })
-    );
+  const { data: leaveRequests } = useQuery({
+    queryKey: ["leave"],
+    queryFn: () => leaveAPI.list().then((res) => res.data),
+  });
 
-    // Listen to visits
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const carers = users?.filter((u: User) => u.role === "carer") || [];
+  const pendingLeave =
+    leaveRequests?.filter((l: LeaveRequest) => l.status === "pending") || [];
+  const todaySchedules =
+    schedules?.filter((s: Schedule) => {
+      const today = new Date().toISOString().split("T")[0];
+      return s.start_time.startsWith(today);
+    }) || [];
 
-    const visitsQuery = query(
-      collection(db, 'visits'),
-      where('scheduledDate', '>=', Timestamp.fromDate(today)),
-      where('scheduledDate', '<', Timestamp.fromDate(tomorrow))
-    );
-
-    unsubscribers.push(
-      onSnapshot(visitsQuery, (snapshot) => {
-        const completed = snapshot.docs.filter((doc) => doc.data().status === 'completed').length;
-        const upcoming = snapshot.docs.filter((doc) => doc.data().status === 'scheduled').length;
-        setStats((prev) => ({
-          ...prev,
-          todayVisits: snapshot.size,
-          completedVisits: completed,
-          upcomingVisits: upcoming,
-        }));
-      })
-    );
-
-    // Listen to incidents
-    const incidentsQuery = query(
-      collection(db, 'incidents'),
-      where('status', '==', 'pending')
-    );
-    unsubscribers.push(
-      onSnapshot(incidentsQuery, (snapshot) => {
-        setStats((prev) => ({ ...prev, pendingIncidents: snapshot.size }));
-      })
-    );
-
-    // Fetch recent visits with carer and client info
-    const fetchRecentVisits = async () => {
-      const recentVisitsQuery = query(
-        collection(db, 'visits'),
-        orderBy('scheduledDate', 'desc'),
-        limit(5)
-      );
-
-      const snapshot = await getDocs(recentVisitsQuery);
-      const visitsWithDetails = await Promise.all(
-        snapshot.docs.map(async (visitDoc) => {
-          const visitData = visitDoc.data();
-          
-          // Fetch carer details
-          const carerDoc = await getDoc(doc(db, 'carers', visitData.carerId));
-          const carerName = carerDoc.exists() ? carerDoc.data().name : 'Unknown Carer';
-          
-          // Fetch client details
-          const clientDoc = await getDoc(doc(db, 'clients', visitData.clientId));
-          const clientName = clientDoc.exists() ? clientDoc.data().name : 'Unknown Client';
-
-          return {
-            id: visitDoc.id,
-            carerName,
-            clientName,
-            status: visitData.status || 'scheduled',
-            timestamp: visitData.scheduledDate.toDate(),
-          };
-        })
-      );
-
-      setRecentVisits(visitsWithDetails);
-    };
-
-    fetchRecentVisits();
-
-    return () => {
-      unsubscribers.forEach((unsubscribe) => unsubscribe());
-    };
-  }, []);
+  const stats = [
+    {
+      title: "Total Clients",
+      value: clients?.length || 0,
+      description: "Active care recipients",
+      icon: Users,
+      color: "text-primary",
+      bgColor: "bg-primary/10",
+    },
+    {
+      title: "Active Carers",
+      value: carers.length,
+      description: "Professional caregivers",
+      icon: UserCircle,
+      color: "text-accent",
+      bgColor: "bg-accent/10",
+    },
+    {
+      title: "Today's Schedules",
+      value: todaySchedules.length,
+      description: "Scheduled visits today",
+      icon: Calendar,
+      color: "text-success",
+      bgColor: "bg-success/10",
+    },
+    {
+      title: "Pending Leave",
+      value: pendingLeave.length,
+      description: "Awaiting approval",
+      icon: CalendarClock,
+      color: "text-warning",
+      bgColor: "bg-warning/10",
+    },
+  ];
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-      >
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="mt-2 text-muted-foreground">
-          Welcome back! Here's what's happening today.
-        </p>
-      </motion.div>
-
-      {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Total Clients"
-          value={stats.totalClients}
-          icon={Users}
-          trend="+12% from last month"
-          trendUp={true}
-          delay={0}
-        />
-        <StatCard
-          title="Active Carers"
-          value={stats.activeCarers}
-          icon={CheckCircle}
-          trend="+5 new this week"
-          trendUp={true}
-          delay={0.1}
-        />
-        <StatCard
-          title="Today's Visits"
-          value={stats.todayVisits}
-          icon={Calendar}
-          trend={`${stats.completedVisits} completed`}
-          trendUp={true}
-          delay={0.2}
-        />
-        <StatCard
-          title="Completed Today"
-          value={stats.completedVisits}
-          icon={TrendingUp}
-          trend={`${stats.upcomingVisits} upcoming`}
-          trendUp={true}
-          delay={0.3}
-        />
-        <StatCard
-          title="Pending Incidents"
-          value={stats.pendingIncidents}
-          icon={AlertCircle}
-          trend={stats.pendingIncidents > 0 ? 'Requires attention' : 'All clear'}
-          trendUp={false}
-          delay={0.4}
-        />
-        <StatCard
-          title="Upcoming Visits"
-          value={stats.upcomingVisits}
-          icon={Clock}
-          trend="Next 2 hours"
-          trendUp={true}
-          delay={0.5}
-        />
-      </div>
-
-      {/* Recent Activity */}
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.6 }}
-        className="rounded-xl bg-gradient-card p-6 shadow-soft"
-      >
-        <h2 className="mb-4 text-xl font-semibold text-foreground">Recent Visits</h2>
-        <div className="space-y-3">
-          {recentVisits.length > 0 ? (
-            recentVisits.map((visit) => (
-              <div
-                key={visit.id}
-                className="flex items-center gap-4 rounded-lg border border-border bg-background/50 p-4"
-              >
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  visit.status === 'completed' 
-                    ? 'bg-secondary/10 text-secondary' 
-                    : visit.status === 'in-progress'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-muted-foreground/10 text-muted-foreground'
-                }`}>
-                  {visit.status === 'completed' ? (
-                    <CheckCircle className="h-5 w-5" />
-                  ) : visit.status === 'in-progress' ? (
-                    <Clock className="h-5 w-5" />
-                  ) : (
-                    <Calendar className="h-5 w-5" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {visit.status === 'completed' ? 'Visit completed' : visit.status === 'in-progress' ? 'Visit in progress' : 'Visit scheduled'} by {visit.carerName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Client: {visit.clientName} • {formatDistanceToNow(visit.timestamp, { addSuffix: true })}
-                  </p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-sm text-muted-foreground py-4">No recent visits</p>
-          )}
+    <DashboardLayout>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-4xl font-bold text-foreground">
+            Admin Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your care operations and team
+          </p>
         </div>
-      </motion.div>
-    </div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.title} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardDescription className="text-sm font-medium">
+                      {stat.title}
+                    </CardDescription>
+                    <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                      <Icon className={`h-5 w-5 ${stat.color}`} />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    <div className="text-3xl font-bold">{stat.value}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {stat.description}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>Latest updates from your team</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {schedules?.slice(0, 5).map((schedule: Schedule) => (
+                  <div
+                    key={schedule.id}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/50"
+                  >
+                    <Calendar className="h-5 w-5 text-primary mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {schedule.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {schedule.carer_name} •{" "}
+                        {new Date(schedule.start_time).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Common administrative tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                <button className="p-4 text-left rounded-lg border border-border hover:bg-accent/10 transition-colors">
+                  <h4 className="font-medium">Create New Schedule</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Assign a task to a carer
+                  </p>
+                </button>
+                <button className="p-4 text-left rounded-lg border border-border hover:bg-accent/10 transition-colors">
+                  <h4 className="font-medium">Add New Client</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Register a care recipient
+                  </p>
+                </button>
+                <button className="p-4 text-left rounded-lg border border-border hover:bg-accent/10 transition-colors">
+                  <h4 className="font-medium">Review Leave Requests</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {pendingLeave.length} pending approval
+                  </p>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </DashboardLayout>
   );
-}
+};
+
+export default AdminDashboard;

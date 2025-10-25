@@ -1,119 +1,108 @@
-import { useEffect } from 'react';
-import { Toaster } from 'react-hot-toast';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import { useThemeStore } from '@/store/themeStore';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { BottomNav } from '@/components/layout/BottomNav';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import Login from "./pages/Login";
+import AdminDashboard from "./pages/admin/Dashboard";
+import AdminClients from "./pages/admin/Clients";
+import AdminCarers from "./pages/admin/Carers";
+import AdminSchedules from "./pages/admin/Schedules";
+import AdminLeave from "./pages/admin/Leave";
+import CarerDashboard from "./pages/carer/Dashboard";
+import CarerSchedules from "./pages/carer/Schedules";
+import CarerLeave from "./pages/carer/Leave";
+import NotFound from "./pages/NotFound";
 
-// Auth
-import AdminLogin from '@/pages/auth/AdminLogin';
-import CarerLogin from '@/pages/auth/CarerLogin';
+const queryClient = new QueryClient();
 
-// Caretaker pages
-import MyDay from '@/pages/caretaker/MyDay';
-import Visits from '@/pages/caretaker/Visits';
-import CaretakerMessages from '@/pages/caretaker/Messages';
-import Profile from '@/pages/caretaker/Profile';
-
-// Admin pages
-import Dashboard from '@/pages/admin/Dashboard';
-import Clients from '@/pages/admin/Clients';
-import Scheduling from '@/pages/admin/Scheduling';
-import Carers from '@/pages/admin/Carers';
-import AdminMessages from '@/pages/admin/Messages';
-
-const App = () => {
-  const { user, role, setUser, setRole, setLoading } = useAuthStore();
-  const { theme, setTheme } = useThemeStore();
-
-  useEffect(() => {
-    // Apply theme on mount
-    const savedTheme = localStorage.getItem('theme-storage');
-    if (savedTheme) {
-      const parsed = JSON.parse(savedTheme);
-      setTheme(parsed.state.theme);
-    }
-  }, [setTheme]);
-
-  useEffect(() => {
-    // Check localStorage for saved auth
-    const savedAuth = localStorage.getItem('auth-user');
-    if (savedAuth) {
-      const { user, role } = JSON.parse(savedAuth);
-      setUser(user);
-      setRole(role);
-    }
-    setLoading(false);
-  }, [setUser, setRole, setLoading]);
-
-  if (!user) {
-    return (
-      <BrowserRouter>
-        <Toaster position="top-center" />
-        <Routes>
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/carer/login" element={<CarerLogin />} />
-          <Route path="*" element={<Navigate to="/admin/login" replace />} />
-        </Routes>
-      </BrowserRouter>
-    );
-  }
-
-  // Admin/Manager Layout
-  if (role === 'admin' || role === 'manager') {
-    return (
-      <BrowserRouter>
-        <Toaster position="top-center" />
-        <SidebarProvider defaultOpen={true}>
-          <div className="flex min-h-screen w-full flex-col">
-            <Navbar />
-            <div className="flex flex-1 w-full">
-              <Sidebar />
-              <main className="flex-1 overflow-y-auto bg-background">
-                <Routes>
-                  <Route path="/admin/dashboard" element={<Dashboard />} />
-                  <Route path="/admin/clients" element={<Clients />} />
-                  <Route path="/admin/scheduling" element={<Scheduling />} />
-                  <Route path="/admin/actions" element={<div className="p-6">My Actions - Coming Soon</div>} />
-                  <Route path="/admin/carers" element={<Carers />} />
-                  <Route path="/admin/training" element={<div className="p-6">Training - Coming Soon</div>} />
-                  <Route path="/admin/messages" element={<AdminMessages />} />
-                  <Route path="/admin/reports" element={<div className="p-6">Reports - Coming Soon</div>} />
-                  <Route path="/admin/finance" element={<div className="p-6">Finance - Coming Soon</div>} />
-                  <Route path="/admin/policies" element={<div className="p-6">Policies - Coming Soon</div>} />
-                  <Route path="/admin/settings" element={<div className="p-6">Settings - Coming Soon</div>} />
-                  <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-                </Routes>
-              </main>
-            </div>
-          </div>
-        </SidebarProvider>
-      </BrowserRouter>
-    );
-  }
-
-  // Caretaker Layout
-  return (
-    <BrowserRouter>
-      <Toaster position="top-center" />
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <main className="flex-1 overflow-y-auto bg-background">
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
           <Routes>
-            <Route path="/caretaker/my-day" element={<MyDay />} />
-            <Route path="/caretaker/visits" element={<Visits />} />
-            <Route path="/caretaker/messages" element={<CaretakerMessages />} />
-            <Route path="/caretaker/profile" element={<Profile />} />
-            <Route path="*" element={<Navigate to="/caretaker/my-day" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+
+            {/* Admin Routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/clients"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminClients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/carers"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminCarers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/schedules"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminSchedules />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/leave"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminLeave />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Carer Routes */}
+            <Route
+              path="/carer"
+              element={
+                <ProtectedRoute requireCarer>
+                  <CarerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/carer/schedules"
+              element={
+                <ProtectedRoute requireCarer>
+                  <CarerSchedules />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/carer/leave"
+              element={
+                <ProtectedRoute requireCarer>
+                  <CarerLeave />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route path="*" element={<NotFound />} />
           </Routes>
-        </main>
-        <BottomNav />
-      </div>
-    </BrowserRouter>
-  );
-};
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
 export default App;
